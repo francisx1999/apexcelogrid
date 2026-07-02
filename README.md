@@ -17,7 +17,7 @@ verify, and build on. Reading is free forever. There is no token and nothing to 
 apexcelogrid/
   contracts/            ProductionLedger.sol — the append-only public ledger
   test/                 Hardhat unit + property tests (27 passing)
-  scripts/deploy.js     deploy to Celo Alfajores testnet / mainnet
+  scripts/deploy.js     deploy to Celo Sepolia testnet / mainnet
   submit/               open-source CLI: register sites (owner) + submit readings (operator)
   web/index.html        minimal, read-only page that lists records (no wallet needed)
   docs/                 technical spec, how-to-run, how-to-adopt, corrected white paper
@@ -60,7 +60,7 @@ Deploy (needs a funded key — see `.env.example`):
 
 ```bash
 cp .env.example .env   # then edit PRIVATE_KEY
-npm run deploy:alfajores   # Celo testnet (free faucet CELO)
+npm run deploy:sepolia     # Celo Sepolia testnet (free faucet CELO)
 # npm run deploy:celo      # Celo mainnet
 ```
 

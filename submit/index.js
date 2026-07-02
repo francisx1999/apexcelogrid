@@ -59,7 +59,7 @@ function required(value, name) {
 }
 
 function getProvider() {
-  const rpc = process.env.RPC_URL || "https://alfajores-forno.celo-testnet.org";
+  const rpc = process.env.RPC_URL || "https://forno.celo-sepolia.celo-testnet.org";
   return new ethers.JsonRpcProvider(rpc);
 }
 

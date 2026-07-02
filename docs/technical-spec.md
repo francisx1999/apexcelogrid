@@ -108,10 +108,11 @@ after registration to freeze the site set.
 
 ## 5. Deployment targets
 
-| Network          | chainId | RPC (default)                                   |
-| ---------------- | ------- | ----------------------------------------------- |
-| Celo Alfajores   | 44787   | `https://alfajores-forno.celo-testnet.org`      |
-| Celo mainnet     | 42220   | `https://forno.celo.org`                        |
+| Network          | chainId    | RPC (default)                                      |
+| ---------------- | ---------- | -------------------------------------------------- |
+| Celo Sepolia     | 11142220   | `https://forno.celo-sepolia.celo-testnet.org`      |
+| Celo Alfajores   | 44787      | `https://alfajores-forno.celo-testnet.org`         |
+| Celo mainnet     | 42220      | `https://forno.celo.org`                           |
 
 Solidity `0.8.24`, optimizer on (200 runs), EVM target `paris` (Celo-compatible).
 

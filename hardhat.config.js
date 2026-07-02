@@ -16,7 +16,13 @@ module.exports = {
     },
   },
   networks: {
-    // Celo Alfajores testnet (free test CELO from a faucet).
+    // Celo Sepolia testnet — the current L2 testnet (faucet: https://faucet.celo.org/celo-sepolia).
+    celoSepolia: {
+      url: process.env.CELO_SEPOLIA_RPC_URL || "https://forno.celo-sepolia.celo-testnet.org",
+      accounts,
+      chainId: 11142220,
+    },
+    // Celo Alfajores testnet (older L1-era testnet; kept for compatibility).
     alfajores: {
       url: process.env.ALFAJORES_RPC_URL || "https://alfajores-forno.celo-testnet.org",
       accounts,
@@ -32,10 +38,19 @@ module.exports = {
   etherscan: {
     // Celoscan verification (optional). Set CELOSCAN_API_KEY to enable.
     apiKey: {
+      celoSepolia: process.env.CELOSCAN_API_KEY || "",
       alfajores: process.env.CELOSCAN_API_KEY || "",
       celo: process.env.CELOSCAN_API_KEY || "",
     },
     customChains: [
+      {
+        network: "celoSepolia",
+        chainId: 11142220,
+        urls: {
+          apiURL: "https://celo-sepolia.blockscout.com/api",
+          browserURL: "https://celo-sepolia.blockscout.com",
+        },
+      },
       {
         network: "alfajores",
         chainId: 44787,

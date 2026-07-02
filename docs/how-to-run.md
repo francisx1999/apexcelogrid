@@ -13,15 +13,25 @@ npm test           # 27 tests should pass
 ## 2. Get a key and some test CELO
 
 1. Create a fresh wallet (e.g. in MetaMask) and copy its private key.
-2. Fund it on **Alfajores testnet** from the faucet: https://faucet.celo.org
+2. Fund it on **Celo Sepolia testnet** from the faucet: https://faucet.celo.org/celo-sepolia
 3. `cp .env.example .env` and set `PRIVATE_KEY=0x...`
 
 > Use a throwaway key that holds only a little CELO. Never commit `.env`.
 
+**Celo Sepolia network reference** (the current L2 testnet):
+
+| Field | Value |
+| ----- | ----- |
+| Chain ID | `11142220` |
+| RPC URL | `https://forno.celo-sepolia.celo-testnet.org` |
+| Explorer | `https://celo-sepolia.blockscout.com` |
+| Faucet | `https://faucet.celo.org/celo-sepolia` |
+
 ## 3. Deploy
 
 ```bash
-npm run deploy:alfajores      # testnet
+npm run deploy:sepolia        # Celo Sepolia testnet (recommended)
+# npm run deploy:alfajores    # older Alfajores testnet
 # npm run deploy:celo         # mainnet (real CELO for gas — still sub-cent)
 ```
 
@@ -100,11 +110,10 @@ Or open `web/index.html` in a browser, paste the contract address, and click
 
 ## 7. Verify on Celoscan (optional)
 
-Set `CELOSCAN_API_KEY` in `.env`, then:
-
 ```bash
-npx hardhat verify --network alfajores <CONTRACT_ADDRESS> <OWNER_ADDRESS>
+npx hardhat verify --network celoSepolia <CONTRACT_ADDRESS> <OWNER_ADDRESS>
 ```
 
-Once verified, anyone can read the source and call the view functions directly on
-https://alfajores.celoscan.io (or https://celoscan.io for mainnet).
+Celo Sepolia uses Blockscout (no API key required for basic verification). Once verified,
+anyone can read the source and call the view functions directly on
+https://celo-sepolia.blockscout.com (or https://celoscan.io for mainnet).
