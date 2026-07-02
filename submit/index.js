@@ -26,6 +26,8 @@ const ABI = [
   "function setOperator(bytes32 siteId, address newOperator) external",
   "function submit(bytes32 siteId, uint64 periodStart, uint64 periodEnd, uint256 energyWh) external returns (uint256)",
   "function submitBatch((bytes32 siteId, uint64 periodStart, uint64 periodEnd, uint256 energyWh)[] readings) external returns (uint256)",
+  "function submitSigned(bytes32 siteId, uint64 periodStart, uint64 periodEnd, uint256 energyWh, uint256 deadline, bytes signature) external returns (uint256)",
+  "function nonces(address) external view returns (uint256)",
   "function submitAdjustment(uint256 correctsIndex, bytes32 siteId, uint64 periodStart, uint64 periodEnd, uint256 energyWh) external returns (uint256)",
   "function total() external view returns (uint256)",
   "function siteOperator(bytes32) external view returns (address)",
@@ -128,6 +130,87 @@ async function main() {
       console.log(`recorded ${readings.length} readings (block ${receipt.blockNumber})`);
       break;
     }
+    case "sign": {
+      // Operator produces an EIP-712 signature OFF-CHAIN (no transaction, no gas).
+      // The resulting JSON payload can be handed to any relayer to submit.
+      const provider = getProvider();
+      const address = required(process.env.CONTRACT_ADDRESS, "CONTRACT_ADDRESS (env)");
+      const pk = required(process.env.PRIVATE_KEY, "PRIVATE_KEY (env)");
+      const wallet = new ethers.Wallet(pk, provider);
+      const c = new ethers.Contract(address, ABI, provider);
+
+      const label = required(args.site, "site");
+      const siteId = toSiteId(label);
+      const periodStart = BigInt(required(args.start, "start"));
+      const periodEnd = BigInt(required(args.end, "end"));
+      const energyWh = BigInt(required(args.wh, "wh"));
+      const nonce = await c.nonces(wallet.address);
+      const deadline = args.deadline
+        ? BigInt(args.deadline)
+        : BigInt(Math.floor(Date.now() / 1000) + 86400); // default: valid 24h
+
+      const net = await provider.getNetwork();
+      const domain = {
+        name: "ApexCeloGrid",
+        version: "1",
+        chainId: net.chainId,
+        verifyingContract: address,
+      };
+      const types = {
+        Reading: [
+          { name: "siteId", type: "bytes32" },
+          { name: "periodStart", type: "uint64" },
+          { name: "periodEnd", type: "uint64" },
+          { name: "energyWh", type: "uint256" },
+          { name: "nonce", type: "uint256" },
+          { name: "deadline", type: "uint256" },
+        ],
+      };
+      const value = { siteId, periodStart, periodEnd, energyWh, nonce, deadline };
+      const signature = await wallet.signTypedData(domain, types, value);
+
+      const payload = {
+        site: label,
+        siteId,
+        start: periodStart.toString(),
+        end: periodEnd.toString(),
+        wh: energyWh.toString(),
+        nonce: nonce.toString(),
+        deadline: deadline.toString(),
+        signer: wallet.address,
+        signature,
+      };
+      const out = JSON.stringify(payload, null, 2);
+      if (args.out) {
+        fs.writeFileSync(args.out, out);
+        console.log(`signed payload written to ${args.out} (share it with a relayer)`);
+      } else {
+        console.log(out);
+      }
+      break;
+    }
+    case "relay": {
+      // Anyone can relay an operator-signed payload and pay the gas.
+      // The recorded submitter is the operator, not the relayer.
+      const c = getContract(true);
+      const file = required(args.file, "file");
+      const p = JSON.parse(fs.readFileSync(file, "utf8"));
+      const siteId = p.siteId || toSiteId(required(p.site, "site (in payload)"));
+      const tx = await c.submitSigned(
+        siteId,
+        BigInt(p.start),
+        BigInt(p.end),
+        BigInt(p.wh),
+        BigInt(p.deadline),
+        p.signature
+      );
+      console.log(`relay tx: ${tx.hash}`);
+      const receipt = await tx.wait();
+      console.log(
+        `relayed reading for "${p.site || siteId}" on behalf of ${p.signer} (block ${receipt.blockNumber})`
+      );
+      break;
+    }
     case "adjust": {
       const c = getContract(true);
       const idx = BigInt(required(args.index, "index"));
@@ -176,6 +259,9 @@ async function main() {
           "  register --site <name> --operator <0x..> [--label <text>]   (owner)\n" +
           "  submit   --site <name> --start <unix> --end <unix> --wh <n>  (operator)\n" +
           "  batch    --file <readings.json>                              (operator, many at once)\n" +
+          "  sign     --site <name> --start <unix> --end <unix> --wh <n> [--deadline <unix>] [--out <file>]\n" +
+          "                                                               (operator, off-chain, gasless)\n" +
+          "  relay    --file <signed-payload.json>                        (anyone; pays gas for the operator)\n" +
           "  adjust   --index <n> --site <name> --start <unix> --end <unix> --wh <n>\n" +
           "  total\n" +
           "  get      --index <n>\n\n" +

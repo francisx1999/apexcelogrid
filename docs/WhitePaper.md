@@ -115,9 +115,14 @@ Key rules:
 - Corrections never rewrite history: **`submitAdjustment`** appends a new record *linked* to
   the one it corrects.
 
+The contract also supports **gasless submission** (`submitSigned`): an operator signs a
+reading off-chain and any relayer or paymaster submits it and pays the sub-cent fee, so an
+operator never needs a token — while the record stays authenticated by the operator's
+signature (with a per-operator nonce and deadline preventing replay).
+
 The full, tested source is [`contracts/ProductionLedger.sol`](../contracts/ProductionLedger.sol);
-the API is documented in [`technical-spec.md`](technical-spec.md). Everything else — multiple
-keys per site, EIP-712 signed/gasless readings, or a renewable-energy-certificate module — is
+the API is documented in [`technical-spec.md`](technical-spec.md). Everything beyond this —
+multiple keys per site, signed *batches*, or a renewable-energy-certificate module — remains
 optional and can be added later, only if the project is adopted. The guiding principle is:
 **ship the smallest useful version first.**
 
@@ -143,8 +148,9 @@ point to a public, low-fee, energy-efficient (proof-of-stake) EVM chain. Celo fi
   expose all data openly.
 - **Operators pay nothing to take part.** The tiny transaction fee can be sponsored by a
   shared treasury (a "paymaster"), so an operator never holds a token, touches an exchange,
-  or sees a bill. *(Gasless relaying is a documented v1.1 extension; it composes with the
-  authorized-submission model via EIP-712 signed readings — see §6 and the technical spec.)*
+  or sees a bill. This is **implemented** via `submitSigned`: an operator signs a reading
+  off-chain (EIP-712) and any relayer submits it and pays the gas, while the record is still
+  credited to — and authenticated by — the operator. See §6 and the technical spec §3.1.
 - **No coin, no speculation.** ApexCeloGrid has no token of its own. It is a public utility,
   not a financial product.
 

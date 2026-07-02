@@ -13,8 +13,9 @@ paste the contract address, and view every record. Free, forever, no login.
 ### 2. Become a submitting operator
 Ask the deployment's owner/governance to register your site
 (`registerSite(siteId, yourOperatorAddress, label)`). Then submit your daily production
-with the `submit/` CLI. You never hold a token beyond a little CELO for sub-cent gas — and a
-future v1.1 paymaster can sponsor even that.
+with the `submit/` CLI. You need never hold a token at all: with the gasless flow
+(`sign` → `relay`) you sign readings off-chain and a paymaster or relayer pays the sub-cent
+gas on your behalf.
 
 ### 3. Run your own instance (fork)
 1. Fork this repository.

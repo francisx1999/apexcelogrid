@@ -34,14 +34,24 @@ paper — *verified* — was not delivered by the code.
 | 5 | **Low** | Only `siteId/period/energy` stored | Added `submitter` and `submittedAt` for provenance/audit. |
 | 6 | **Quality** | Hand-rolled, untested | OpenZeppelin `Ownable`, custom errors (gas-cheap, descriptive), NatSpec, and a **17-test** Hardhat suite. |
 
-## Deliberately deferred (documented, not built)
+## Added in v1.1
 
-To honour "ship the smallest useful version first," these remain optional v1.1+ modules in
-[`technical-spec.md`](technical-spec.md#6-roadmap--optional-v11-modules):
+- **Batch submission** (`submitBatch`) — an operator records many readings across sites in
+  one atomic transaction.
+- **EIP-712 signed / gasless readings** (`submitSigned`) — an operator signs a reading
+  off-chain; any relayer or paymaster submits it and pays the gas, while the record stays
+  authenticated by (and credited to) the operator. Replay is prevented by a per-operator
+  sequential nonce plus a signature deadline. This is what makes the white paper's "operators
+  pay nothing / never hold a token" claim fully real. Uses audited OpenZeppelin `EIP712` +
+  `ECDSA` (pinned to 5.0.2 for Paris/EVM portability — the newer 5.x line pulls in a
+  Cancun-only `mcopy` path). See `technical-spec.md §3.1`.
 
-- **EIP-712 signed / gasless readings** (operator signs off-chain; a paymaster relays). This
-  is what makes the white paper's "operators pay nothing / never hold a token" claim fully
-  real, and it composes cleanly with the registry.
+## Still deferred (documented, not built)
+
+To honour "ship the smallest useful version first," these remain optional modules in
+[`technical-spec.md`](technical-spec.md#6-roadmap--optional-modules):
+
+- Signed **batches** (one signature authorizing many readings).
 - Multiple authorized keys per site.
 - Renewable-energy-certificate (REC) module.
 - Richer on-chain site metadata.
@@ -49,6 +59,6 @@ To honour "ship the smallest useful version first," these remain optional v1.1+ 
 ## Documentation reconciled
 
 The white-paper wording was updated to match the code — the "verified" claim is now backed by
-the registry, and the gasless-paymaster paragraph is explicitly labelled a v1.1 extension. See
-[`WhitePaper.md`](WhitePaper.md). The original PDFs are left untouched; regenerating a styled
-PDF from `WhitePaper.md` is the maintainer's step.
+the registry, and the gasless-paymaster promise is now backed by the implemented `submitSigned`
+path (no longer a deferred extension). See [`WhitePaper.md`](WhitePaper.md). The original PDFs
+are left untouched; regenerating a styled PDF from `WhitePaper.md` is the maintainer's step.

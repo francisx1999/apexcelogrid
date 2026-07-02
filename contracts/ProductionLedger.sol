@@ -2,18 +2,27 @@
 pragma solidity ^0.8.20;
 
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
+import {EIP712} from "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
+import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 
 /// @title ProductionLedger
 /// @notice An open, append-only, public record of verified electricity generation
 ///         in Nigeria. Each record states that a registered site produced a given
 ///         amount of energy over a given time window. Records can never be edited or
 ///         deleted; corrections are made by appending a linked adjustment.
-/// @dev v1 trust model: a site registry with a per-site authorized operator. Only the
-///      operator authorized for a `siteId` may submit records for it, which is what
-///      makes the data "verified" rather than a public bulletin board. A future v1.1
-///      may add EIP-712 signed readings so anyone can relay an operator's signed data
-///      (enabling gasless submission via a paymaster) — see docs/technical-spec.md.
-contract ProductionLedger is Ownable {
+/// @dev Trust model: a site registry with a per-site authorized operator. Only that
+///      operator may record data for a `siteId`, which is what makes the data "verified"
+///      rather than a public bulletin board. Authorization is proven in one of two ways:
+///        1. Directly — the operator sends the transaction (`submit` / `submitBatch` /
+///           `submitAdjustment`), so `msg.sender` must be the operator.
+///        2. By EIP-712 signature — the operator signs a reading off-chain and anyone
+///           (e.g. a paymaster/relayer) submits it (`submitSigned`). The recorded
+///           submitter is the operator, not the relayer. Replay is prevented by a
+///           per-operator sequential nonce plus a signature deadline. This enables
+///           gasless submission so an operator never needs to hold a token.
+contract ProductionLedger is Ownable, EIP712 {
+    using ECDSA for bytes32;
+
     /// @notice Sentinel meaning "this record is an original, not a correction".
     uint256 internal constant NO_CORRECTION = type(uint256).max;
 
@@ -45,6 +54,15 @@ contract ProductionLedger is Ownable {
     /// @notice Optional human-readable label for a site (e.g. "REA-Mokwa-01").
     mapping(bytes32 => string) public siteLabel;
 
+    /// @notice Next expected signature nonce for each operator address (replay protection
+    ///         for `submitSigned`). Sequential per operator, across all sites they operate.
+    mapping(address => uint256) public nonces;
+
+    /// @dev EIP-712 type hash for a signed reading.
+    bytes32 private constant READING_TYPEHASH = keccak256(
+        "Reading(bytes32 siteId,uint64 periodStart,uint64 periodEnd,uint256 energyWh,uint256 nonce,uint256 deadline)"
+    );
+
     event SiteRegistered(bytes32 indexed siteId, address indexed operator, string label);
     event OperatorChanged(bytes32 indexed siteId, address indexed oldOperator, address indexed newOperator);
     event Recorded(
@@ -54,6 +72,10 @@ contract ProductionLedger is Ownable {
         uint256 energyWh,
         uint256 indexed index,
         uint256 correctsIndex
+    );
+    /// @notice Emitted when a record is submitted by a relayer on an operator's behalf.
+    event RelayedSubmission(
+        bytes32 indexed siteId, address indexed relayer, address indexed operator, uint256 index
     );
 
     error SiteAlreadyRegistered(bytes32 siteId);
@@ -65,8 +87,11 @@ contract ProductionLedger is Ownable {
     error BadCorrectionIndex(uint256 correctsIndex);
     error SiteMismatch(uint256 correctsIndex);
     error EmptyBatch();
+    error SignatureExpired(uint256 deadline);
 
-    constructor(address initialOwner) Ownable(initialOwner) {}
+    /// @param initialOwner the accreditation authority (ideally a governance multisig).
+    /// @dev The EIP-712 domain is ("ApexCeloGrid", "1"); off-chain signers must match it.
+    constructor(address initialOwner) Ownable(initialOwner) EIP712("ApexCeloGrid", "1") {}
 
     // ---------------------------------------------------------------------
     // Registry (owner / governance controlled)
@@ -142,6 +167,53 @@ contract ProductionLedger is Ownable {
         return _append(siteId, periodStart, periodEnd, energyWh, correctsIndex);
     }
 
+    // ---------------------------------------------------------------------
+    // Gasless submission (EIP-712 signed by the operator, relayed by anyone)
+    // ---------------------------------------------------------------------
+
+    /// @notice Record an original reading that the site's operator signed off-chain.
+    ///         Anyone (typically a paymaster/relayer) may call this and pay the gas; the
+    ///         recorded submitter is the operator, not the caller.
+    /// @dev The signature covers a `Reading(bytes32 siteId,uint64 periodStart,uint64
+    ///      periodEnd,uint256 energyWh,uint256 nonce,uint256 deadline)` under this
+    ///      contract's EIP-712 domain. `nonce` must equal the operator's current `nonces`
+    ///      value (checked implicitly: a wrong nonce recovers a different signer and
+    ///      reverts), giving strong replay protection. `deadline` bounds how long the
+    ///      signature is valid.
+    /// @param deadline   unix seconds after which the signature is rejected
+    /// @param signature  the operator's 65-byte EIP-712 signature
+    /// @return index      the index of the newly appended record
+    function submitSigned(
+        bytes32 siteId,
+        uint64 periodStart,
+        uint64 periodEnd,
+        uint256 energyWh,
+        uint256 deadline,
+        bytes calldata signature
+    ) external returns (uint256 index) {
+        if (block.timestamp > deadline) revert SignatureExpired(deadline);
+        address operator = siteOperator[siteId];
+        if (operator == address(0)) revert SiteNotRegistered(siteId);
+
+        uint256 nonce = nonces[operator];
+        bytes32 structHash =
+            keccak256(abi.encode(READING_TYPEHASH, siteId, periodStart, periodEnd, energyWh, nonce, deadline));
+        address signer = _hashTypedDataV4(structHash).recover(signature);
+        if (signer != operator) revert NotSiteOperator(siteId, signer);
+
+        // Consume the nonce before storing; a revert in `_store` rolls this back.
+        unchecked {
+            nonces[operator] = nonce + 1;
+        }
+        index = _store(siteId, periodStart, periodEnd, energyWh, operator, NO_CORRECTION);
+        emit RelayedSubmission(siteId, msg.sender, operator, index);
+    }
+
+    // ---------------------------------------------------------------------
+    // Internal storage / authorization helpers
+    // ---------------------------------------------------------------------
+
+    /// @dev Direct path: the caller must be the site's authorized operator.
     function _append(
         bytes32 siteId,
         uint64 periodStart,
@@ -152,6 +224,19 @@ contract ProductionLedger is Ownable {
         address operator = siteOperator[siteId];
         if (operator == address(0)) revert SiteNotRegistered(siteId);
         if (msg.sender != operator) revert NotSiteOperator(siteId, msg.sender);
+        return _store(siteId, periodStart, periodEnd, energyWh, msg.sender, correctsIndex);
+    }
+
+    /// @dev Validates and appends a record. Callers MUST have already authorized the
+    ///      `submitter` for `siteId` (directly via msg.sender, or via signature).
+    function _store(
+        bytes32 siteId,
+        uint64 periodStart,
+        uint64 periodEnd,
+        uint256 energyWh,
+        address submitter,
+        uint256 correctsIndex
+    ) internal returns (uint256 index) {
         if (periodEnd <= periodStart) revert InvalidPeriod(periodStart, periodEnd);
         if (energyWh == 0) revert ZeroEnergy();
 
@@ -162,7 +247,7 @@ contract ProductionLedger is Ownable {
                 periodStart: periodStart,
                 periodEnd: periodEnd,
                 energyWh: energyWh,
-                submitter: msg.sender,
+                submitter: submitter,
                 submittedAt: uint64(block.timestamp),
                 correctsIndex: correctsIndex
             })

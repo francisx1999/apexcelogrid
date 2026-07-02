@@ -7,7 +7,7 @@ Everything below uses only Node.js (v18+) and npm. No Foundry required.
 ```bash
 npm install
 npm run build      # compile
-npm test           # 20 tests should pass
+npm test           # 27 tests should pass
 ```
 
 ## 2. Get a key and some test CELO
@@ -67,6 +67,26 @@ Correct an earlier record without rewriting it:
 node submit/index.js adjust --index 0 --site "REA-Mokwa-01" \
   --start 1719792000 --end 1719878400 --wh 4800000
 ```
+
+### 5a. Gasless submission (operator never holds a token)
+
+An operator can **sign** a reading off-chain (no gas, no token), and **anyone** — a paymaster,
+a state agency, or a volunteer — can **relay** it on-chain and pay the sub-cent fee.
+
+```bash
+# Operator signs (PRIVATE_KEY = the operator key). Produces a JSON payload:
+node submit/index.js sign \
+  --site "REA-Mokwa-01" --start 1719792000 --end 1719878400 --wh 5000000 \
+  --out reading.signed.json
+
+# Anyone relays it (PRIVATE_KEY = the relayer's own key; the relayer pays gas).
+# The record is credited to the operator, not the relayer.
+node submit/index.js relay --file reading.signed.json
+```
+
+The signature is valid for 24h by default (override with `--deadline <unix>`), single-use
+(a per-operator nonce prevents replay), and cannot be altered — changing any field
+invalidates it.
 
 ## 6. Read the ledger (free, no key)
 

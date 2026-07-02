@@ -46,6 +46,28 @@ is legitimate. v1 closes that gap with a **site registry + per-site operator all
 - **`submitAdjustment(uint256 correctsIndex, ...)`** — *authorized operator only.* Appends a
   correction linked to an earlier record for the **same** site. The original is never
   modified. Reverts on an out-of-range index or a site mismatch.
+- **`submitSigned(bytes32 siteId, ..., uint256 deadline, bytes signature)`** — *anyone may
+  call; the operator must have signed.* Gasless path: the operator signs a reading off-chain
+  (EIP-712) and any relayer submits it and pays the gas. The recorded `submitter` is the
+  **operator**, not the caller. See §3.1.
+
+### 3.1 Gasless submission (EIP-712)
+
+`submitSigned` lets an operator participate without ever holding a token: a paymaster or
+relayer pays the gas. Authenticity and anti-replay are preserved cryptographically.
+
+- **Domain:** `EIP712("ApexCeloGrid", "1")`, bound to this contract's address and chainId.
+- **Signed struct:** `Reading(bytes32 siteId, uint64 periodStart, uint64 periodEnd, uint256 energyWh, uint256 nonce, uint256 deadline)`.
+- **Authorization:** the recovered signer must equal `siteOperator[siteId]`. A tampered field
+  or a non-operator signature recovers a different address and reverts.
+- **Replay protection:** a **per-operator sequential nonce** (`nonces(address)`), consumed on
+  success. Re-submitting a used signature recovers the wrong signer (nonce moved on) and
+  reverts. The nonce is only consumed if the whole call succeeds.
+- **Expiry:** `deadline` (unix seconds); a signature past its deadline is rejected.
+- **Event:** `RelayedSubmission(siteId, relayer, operator, index)` in addition to `Recorded`.
+
+Only single readings are signable in this version; a signed *batch* is a possible future
+extension. Operators read their current nonce from `nonces(operatorAddress)` before signing.
 
 The **owner** is intended to be a lightweight, multi-stakeholder governance address
 (regulator/REA, operator associations, independent maintainers) responsible **only** for
@@ -71,12 +93,15 @@ accreditation — never for editing or deleting production data, which is imposs
 | ------------------------------ | -------------------------------------------------------------------- |
 | Unauthorized / fake writes     | Per-site operator allowlist; `submit` reverts for non-operators      |
 | Editing / deleting history     | No update/delete functions; corrections are append-only linked rows  |
-| Garbage data                   | Validates `periodEnd > periodStart` and `energyWh > 0`               |
+| Garbage data                   | Validates `periodEnd > periodStart` and `energyWh > 0` (both paths)  |
 | Cross-site correction spoofing | `submitAdjustment` requires the target record's `siteId` to match    |
-| Integer overflow               | Solidity ≥0.8 checked arithmetic; no `unchecked` blocks              |
+| Signature replay (gasless)     | Per-operator sequential nonce + `deadline`; nonce consumed on success |
+| Signature forgery / tampering  | EIP-712 typed-data recovery; signer must equal the site operator     |
+| Relayer impersonation          | `submitSigned` records the operator as submitter, never the relayer  |
+| Integer overflow               | Solidity ≥0.8 checked arithmetic; the only `unchecked` is a nonce increment that cannot realistically overflow |
 | Reentrancy                     | No external calls, no value transfer — no reentrancy surface         |
 | Privileged-role abuse          | Owner can accredit sites but **cannot** alter or remove records      |
-| Access-control library         | OpenZeppelin `Ownable` (audited)                                     |
+| Crypto / access libraries      | OpenZeppelin `Ownable`, `EIP712`, `ECDSA` (audited), pinned to 5.0.2 |
 
 Ownership can be transferred (`transferOwnership`) to a governance multisig, or renounced
 after registration to freeze the site set.
@@ -90,25 +115,29 @@ after registration to freeze the site set.
 
 Solidity `0.8.24`, optimizer on (200 runs), EVM target `paris` (Celo-compatible).
 
-## 6. Roadmap — optional v1.1+ modules
+## 6. Roadmap — optional modules
 
-These are **not** required for v1 and are added only if the project is adopted:
+**Implemented (v1.1):**
 
-1. **EIP-712 signed readings (gasless).** An operator signs a reading off-chain with its
-   registered key; anyone (or a paymaster) relays it on-chain. This preserves authenticity
-   while letting a shared treasury sponsor gas, so an operator never holds a token. The
-   contract would recover the signer and check it against the registered site key, plus a
-   per-site nonce and `deadline` to prevent replay.
+- **EIP-712 signed readings (gasless).** ✅ See §3.1 / `submitSigned`. An operator signs a
+  reading off-chain; a paymaster or relayer submits it and pays the gas, so an operator never
+  holds a token. Authenticity is preserved (signer must be the site operator) with a
+  per-operator nonce and `deadline` for replay protection.
+
+**Still optional, added only if adopted:**
+
+1. **Signed batches.** A single signature authorizing many readings at once.
 2. **Multi-key sites.** Allow more than one authorized key per site (e.g. a backup device).
 3. **Renewable-energy-certificate (REC) module.** Issue/track certificates against records.
 4. **Richer site metadata / registry contract.** Capacity, location hash, accreditation ref.
 
 ## 7. Testing
 
-`npm test` runs a Hardhat suite (20 cases) covering registration and access control,
+`npm test` runs a Hardhat suite (27 cases) covering registration and access control,
 operator authorization, input validation, batch submission (atomicity, cross-site,
-empty-batch), event emission and indices, append-only adjustments (including cross-site
-rejection), and an accumulation property test.
+empty-batch), gasless EIP-712 submission (relay, replay, expiry, tampering, forgery,
+validation, unregistered site), event emission and indices, append-only adjustments
+(including cross-site rejection), and an accumulation property test.
 
 ## 8. Contact
 

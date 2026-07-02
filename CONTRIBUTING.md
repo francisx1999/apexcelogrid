@@ -14,7 +14,7 @@ for v1 or whether it belongs in the optional-modules roadmap
 ```bash
 npm install
 npm run build      # compile
-npm test           # all tests must pass (currently 20)
+npm test           # all tests must pass (currently 27)
 ```
 
 ## Making a change

@@ -16,7 +16,7 @@ verify, and build on. Reading is free forever. There is no token and nothing to 
 ```
 apexcelogrid/
   contracts/            ProductionLedger.sol — the append-only public ledger
-  test/                 Hardhat unit + property tests (20 passing)
+  test/                 Hardhat unit + property tests (27 passing)
   scripts/deploy.js     deploy to Celo Alfajores testnet / mainnet
   submit/               open-source CLI: register sites (owner) + submit readings (operator)
   web/index.html        minimal, read-only page that lists records (no wallet needed)
@@ -42,16 +42,18 @@ This is the key hardening over the original white-paper sketch, whose `submit()`
 public and unauthenticated — meaning anyone could write any number for any site. See
 [`docs/CHANGES.md`](docs/CHANGES.md) for the full before/after.
 
-A future **v1.1** may add EIP-712 signed readings so anyone can *relay* an operator's
-signed data (enabling gasless submission via a Celo paymaster) — documented in
-[`docs/technical-spec.md`](docs/technical-spec.md).
+**Gasless submission (v1.1, implemented).** An operator can sign a reading off-chain
+(EIP-712) and **anyone** — a paymaster or relayer — can submit it and pay the sub-cent gas,
+so an operator never needs to hold a token. Authenticity is preserved (the signer must be the
+site's operator), with a per-operator nonce and a deadline for replay protection. See
+`submitSigned` and [`docs/technical-spec.md §3.1`](docs/technical-spec.md).
 
 ## Quick start
 
 ```bash
 npm install            # install Hardhat + OpenZeppelin
 npm run build          # compile the contract
-npm test               # run the test suite (20 passing)
+npm test               # run the test suite (27 passing)
 ```
 
 Deploy (needs a funded key — see `.env.example`):
@@ -73,6 +75,13 @@ node index.js submit --site "REA-Mokwa-01" --start 1719792000 --end 1719878400 -
 # many readings in one transaction:
 node index.js batch --file readings.example.json
 node index.js total
+```
+
+Gasless (operator signs off-chain; anyone relays and pays gas):
+
+```bash
+node submit/index.js sign --site "REA-Mokwa-01" --start 1719792000 --end 1719878400 --wh 5000000 --out reading.signed.json
+node submit/index.js relay --file reading.signed.json    # relayer pays; record credited to operator
 ```
 
 View records: open `web/index.html`, paste the deployed contract address, click **Load records**.
