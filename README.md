@@ -9,6 +9,9 @@ verify, and build on. Reading is free forever. There is no token and nothing to 
 > In one sentence: ApexCeloGrid is a free, open, and trustworthy record of who is
 > generating electricity in Nigeria, where, and how much.
 
+**Live on Celo Sepolia testnet:** [`0x4581564c4886953eD118269Bc88D3beE01cDc4fe`](https://celo-sepolia.blockscout.com/address/0x4581564c4886953eD118269Bc88D3beE01cDc4fe)
+— see [`DEPLOYMENT.md`](DEPLOYMENT.md) for transaction links.
+
 ---
 
 ## Repository layout
