@@ -38,6 +38,11 @@ is legitimate. v1 closes that gap with a **site registry + per-site operator all
 - **`submit(...)`** — *authorized operator only.* Records an original reading. Reverts if the
   site is not registered, the caller is not the site's operator, the period is invalid
   (`end <= start`), or `energyWh == 0`.
+- **`submitBatch(Reading[] readings)`** — *authorized operator only.* Records many original
+  readings in one transaction (atomic: any invalid or unauthorized reading reverts the whole
+  batch). Each reading is authorized per-site, so a batch may span any sites the caller
+  operates. Reverts on an empty batch. The loop is bounded only by the caller's own gas and
+  is fully permissioned, so it has no griefing surface.
 - **`submitAdjustment(uint256 correctsIndex, ...)`** — *authorized operator only.* Appends a
   correction linked to an earlier record for the **same** site. The original is never
   modified. Reverts on an out-of-range index or a site mismatch.
@@ -100,6 +105,12 @@ These are **not** required for v1 and are added only if the project is adopted:
 
 ## 7. Testing
 
-`npm test` runs a Hardhat suite (17 cases) covering registration and access control,
-operator authorization, input validation, event emission and indices, append-only
-adjustments (including cross-site rejection), and an accumulation property test.
+`npm test` runs a Hardhat suite (20 cases) covering registration and access control,
+operator authorization, input validation, batch submission (atomicity, cross-site,
+empty-batch), event emission and indices, append-only adjustments (including cross-site
+rejection), and an accumulation property test.
+
+## 8. Contact
+
+General questions and responsible-disclosure reports: **no-reply@apexgridapps.com**. See
+[`../SECURITY.md`](../SECURITY.md).

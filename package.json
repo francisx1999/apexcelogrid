@@ -3,6 +3,20 @@
   "version": "1.0.0",
   "description": "An open public ledger for Nigeria's electricity generation, on Celo.",
   "license": "MIT",
+  "author": "ApexCeloGrid contributors <no-reply@apexgridapps.com>",
+  "homepage": "https://apexgridapps.com",
+  "bugs": {
+    "email": "no-reply@apexgridapps.com"
+  },
+  "keywords": [
+    "celo",
+    "solidity",
+    "energy",
+    "nigeria",
+    "public-good",
+    "ledger",
+    "mini-grid"
+  ],
   "scripts": {
     "build": "hardhat compile",
     "test": "hardhat test",

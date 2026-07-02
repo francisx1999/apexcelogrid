@@ -7,7 +7,7 @@ Everything below uses only Node.js (v18+) and npm. No Foundry required.
 ```bash
 npm install
 npm run build      # compile
-npm test           # 17 tests should pass
+npm test           # 20 tests should pass
 ```
 
 ## 2. Get a key and some test CELO
@@ -52,6 +52,13 @@ node submit/index.js submit \
   --start 1719792000 \
   --end   1719878400 \
   --wh    5000000
+```
+
+Submit many readings (e.g. a whole day across several sites) in **one** transaction:
+
+```bash
+# edit submit/readings.example.json, then:
+node submit/index.js batch --file submit/readings.example.json
 ```
 
 Correct an earlier record without rewriting it:

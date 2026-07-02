@@ -119,6 +119,51 @@ describe("ProductionLedger", function () {
     });
   });
 
+  describe("submitBatch", function () {
+    const SITE2 = site("REA-Bida-02");
+    beforeEach(async function () {
+      await ledger.registerSite(SITE, operator.address, "Mokwa");
+      await ledger.registerSite(SITE2, operator.address, "Bida");
+    });
+
+    it("records many readings, possibly across sites, in one tx", async function () {
+      const readings = [
+        { siteId: SITE, periodStart: 1000, periodEnd: 2000, energyWh: 10 },
+        { siteId: SITE2, periodStart: 1000, periodEnd: 2000, energyWh: 20 },
+        { siteId: SITE, periodStart: 2000, periodEnd: 3000, energyWh: 30 },
+      ];
+      await ledger.connect(operator).submitBatch(readings);
+      expect(await ledger.total()).to.equal(3);
+      expect((await ledger.getRecord(1)).siteId).to.equal(SITE2);
+      expect((await ledger.getRecord(2)).energyWh).to.equal(30);
+    });
+
+    it("reverts the whole batch if any reading is unauthorized or invalid", async function () {
+      // second reading is for a site `other` does not operate
+      const readings = [
+        { siteId: SITE, periodStart: 1000, periodEnd: 2000, energyWh: 10 },
+      ];
+      await expect(
+        ledger.connect(other).submitBatch(readings)
+      ).to.be.revertedWithCustomError(ledger, "NotSiteOperator");
+      // an invalid reading anywhere reverts everything (atomic) -> nothing stored
+      const withBad = [
+        { siteId: SITE, periodStart: 1000, periodEnd: 2000, energyWh: 10 },
+        { siteId: SITE, periodStart: 5000, periodEnd: 5000, energyWh: 5 }, // bad period
+      ];
+      await expect(
+        ledger.connect(operator).submitBatch(withBad)
+      ).to.be.revertedWithCustomError(ledger, "InvalidPeriod");
+      expect(await ledger.total()).to.equal(0);
+    });
+
+    it("rejects an empty batch", async function () {
+      await expect(
+        ledger.connect(operator).submitBatch([])
+      ).to.be.revertedWithCustomError(ledger, "EmptyBatch");
+    });
+  });
+
   describe("submitAdjustment", function () {
     beforeEach(async function () {
       await ledger.registerSite(SITE, operator.address, "Mokwa mini-grid");

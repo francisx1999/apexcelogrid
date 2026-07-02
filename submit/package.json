@@ -4,6 +4,11 @@
   "description": "Open-source CLI for registering sites and submitting production readings to ApexCeloGrid.",
   "type": "commonjs",
   "license": "MIT",
+  "author": "ApexCeloGrid contributors <no-reply@apexgridapps.com>",
+  "homepage": "https://apexgridapps.com",
+  "bugs": {
+    "email": "no-reply@apexgridapps.com"
+  },
   "bin": {
     "apexcelogrid": "./index.js"
   },

@@ -27,6 +27,14 @@ contract ProductionLedger is Ownable {
         uint256 correctsIndex; // index this record adjusts, or NO_CORRECTION if original
     }
 
+    /// @notice A single reading, used for batch submission. Same fields as an original record.
+    struct Reading {
+        bytes32 siteId;
+        uint64 periodStart;
+        uint64 periodEnd;
+        uint256 energyWh;
+    }
+
     /// @notice All production records, in submission order. Append-only.
     Record[] public records;
 
@@ -56,6 +64,7 @@ contract ProductionLedger is Ownable {
     error ZeroEnergy();
     error BadCorrectionIndex(uint256 correctsIndex);
     error SiteMismatch(uint256 correctsIndex);
+    error EmptyBatch();
 
     constructor(address initialOwner) Ownable(initialOwner) {}
 
@@ -99,6 +108,23 @@ contract ProductionLedger is Ownable {
         returns (uint256 index)
     {
         return _append(siteId, periodStart, periodEnd, energyWh, NO_CORRECTION);
+    }
+
+    /// @notice Record several original readings in one transaction.
+    /// @dev Convenience for operators reporting many sites/periods at once (e.g. a full
+    ///      day). Each reading is authorized and validated individually via `_append`, so a
+    ///      batch may span any sites the caller operates. The loop is bounded only by the
+    ///      operator's own gas — it is permissioned, so there is no griefing surface.
+    /// @return firstIndex the index of the first appended record; the batch occupies
+    ///         [firstIndex, firstIndex + readings.length).
+    function submitBatch(Reading[] calldata readings) external returns (uint256 firstIndex) {
+        uint256 n = readings.length;
+        if (n == 0) revert EmptyBatch();
+        firstIndex = records.length;
+        for (uint256 i = 0; i < n; i++) {
+            Reading calldata r = readings[i];
+            _append(r.siteId, r.periodStart, r.periodEnd, r.energyWh, NO_CORRECTION);
+        }
     }
 
     /// @notice Append a correction that adjusts an earlier record for the same site.

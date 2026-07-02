@@ -16,7 +16,7 @@ verify, and build on. Reading is free forever. There is no token and nothing to 
 ```
 apexcelogrid/
   contracts/            ProductionLedger.sol — the append-only public ledger
-  test/                 Hardhat unit + property tests (17 passing)
+  test/                 Hardhat unit + property tests (20 passing)
   scripts/deploy.js     deploy to Celo Alfajores testnet / mainnet
   submit/               open-source CLI: register sites (owner) + submit readings (operator)
   web/index.html        minimal, read-only page that lists records (no wallet needed)
@@ -51,7 +51,7 @@ signed data (enabling gasless submission via a Celo paymaster) — documented in
 ```bash
 npm install            # install Hardhat + OpenZeppelin
 npm run build          # compile the contract
-npm test               # run the test suite (17 passing)
+npm test               # run the test suite (20 passing)
 ```
 
 Deploy (needs a funded key — see `.env.example`):
@@ -70,6 +70,8 @@ cd submit && npm install
 node index.js register --site "REA-Mokwa-01" --operator 0xOPERATOR --label "Mokwa mini-grid"
 # operator (1-day window, 5,000 kWh = 5,000,000 Wh):
 node index.js submit --site "REA-Mokwa-01" --start 1719792000 --end 1719878400 --wh 5000000
+# many readings in one transaction:
+node index.js batch --file readings.example.json
 node index.js total
 ```
 
@@ -88,6 +90,17 @@ View records: open `web/index.html`, paste the deployed contract address, click 
 Public, sub-cent fees, carbon-negative, mobile-first, and — since 2025 — an Ethereum
 Layer 2, so it inherits Ethereum's security. The contract is vanilla Solidity and portable
 to any EVM chain.
+
+## Contributing & security
+
+- Contributions and forks welcome — see [`CONTRIBUTING.md`](CONTRIBUTING.md). CI runs the full
+  test suite on every push.
+- Found a vulnerability? **Do not open a public issue** — email **no-reply@apexgridapps.com**.
+  See [`SECURITY.md`](SECURITY.md).
+
+## Contact
+
+General questions and disclosures: **no-reply@apexgridapps.com** · https://apexgridapps.com
 
 ## Licence
 

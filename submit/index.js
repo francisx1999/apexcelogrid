@@ -18,12 +18,14 @@
 //
 // Reading is always free and needs no key; only register/submit send a transaction.
 require("dotenv").config();
+const fs = require("fs");
 const { ethers } = require("ethers");
 
 const ABI = [
   "function registerSite(bytes32 siteId, address operator, string label) external",
   "function setOperator(bytes32 siteId, address newOperator) external",
   "function submit(bytes32 siteId, uint64 periodStart, uint64 periodEnd, uint256 energyWh) external returns (uint256)",
+  "function submitBatch((bytes32 siteId, uint64 periodStart, uint64 periodEnd, uint256 energyWh)[] readings) external returns (uint256)",
   "function submitAdjustment(uint256 correctsIndex, bytes32 siteId, uint64 periodStart, uint64 periodEnd, uint256 energyWh) external returns (uint256)",
   "function total() external view returns (uint256)",
   "function siteOperator(bytes32) external view returns (address)",
@@ -96,6 +98,36 @@ async function main() {
       console.log(`recorded ${wh} Wh for "${args.site}" (block ${receipt.blockNumber})`);
       break;
     }
+    case "batch": {
+      // Read many readings from a JSON file and submit them in one transaction.
+      // File format: [{ "site": "REA-Mokwa-01", "start": 1719792000, "end": 1719878400, "wh": 5000000 }, ...]
+      const c = getContract(true);
+      const file = required(args.file, "file");
+      const raw = JSON.parse(fs.readFileSync(file, "utf8"));
+      if (!Array.isArray(raw) || raw.length === 0) {
+        console.error("File must be a non-empty JSON array of readings.");
+        process.exit(1);
+      }
+      const readings = raw.map((r, i) => {
+        for (const k of ["site", "start", "end", "wh"]) {
+          if (r[k] === undefined) {
+            console.error(`Reading ${i} is missing "${k}"`);
+            process.exit(1);
+          }
+        }
+        return {
+          siteId: toSiteId(r.site),
+          periodStart: BigInt(r.start),
+          periodEnd: BigInt(r.end),
+          energyWh: BigInt(r.wh),
+        };
+      });
+      const tx = await c.submitBatch(readings);
+      console.log(`batch tx: ${tx.hash}`);
+      const receipt = await tx.wait();
+      console.log(`recorded ${readings.length} readings (block ${receipt.blockNumber})`);
+      break;
+    }
     case "adjust": {
       const c = getContract(true);
       const idx = BigInt(required(args.index, "index"));
@@ -143,6 +175,7 @@ async function main() {
           "Commands:\n" +
           "  register --site <name> --operator <0x..> [--label <text>]   (owner)\n" +
           "  submit   --site <name> --start <unix> --end <unix> --wh <n>  (operator)\n" +
+          "  batch    --file <readings.json>                              (operator, many at once)\n" +
           "  adjust   --index <n> --site <name> --start <unix> --end <unix> --wh <n>\n" +
           "  total\n" +
           "  get      --index <n>\n\n" +
