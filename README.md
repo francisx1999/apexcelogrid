@@ -12,6 +12,28 @@ verify, and build on. Reading is free forever. There is no token and nothing to 
 **Live on Celo Sepolia testnet:** [`0x4581564c4886953eD118269Bc88D3beE01cDc4fe`](https://celo-sepolia.blockscout.com/address/0x4581564c4886953eD118269Bc88D3beE01cDc4fe)
 — see [`DEPLOYMENT.md`](DEPLOYMENT.md) for transaction links.
 
+## Project status & taking it to production
+
+This project is offered as a **complete, open-source contribution**: a working, tested,
+documented smart contract and toolkit, proven end-to-end on a public blockchain (the Celo
+Sepolia testnet deployment above). It is intentionally finished at *"published and
+documented"* — anyone is free to adopt, fork, and run it.
+
+**Taking it to Celo mainnet is an adoption step, not an authoring one.** It carries real
+responsibilities — funding gas, securing keys, and governing accreditation — that belong to
+whoever operates it in production (a mini-grid operator, the REA, a state agency, a
+university, or a developer). When you're ready to own those responsibilities:
+
+1. Use a **secure wallet** (ideally set the contract owner to a governance **multisig**, e.g.
+   a [Safe](https://safe.global) shared among stakeholders) — never a key that has been
+   shared or reused.
+2. Fund the deployer with a small amount of **real CELO** for gas (deployment is well under a
+   US cent, but keep a buffer).
+3. Deploy: `OWNER_ADDRESS=<multisig> npm run deploy:celo`
+
+See [`docs/how-to-adopt.md`](docs/how-to-adopt.md) for the full adoption guide and
+[`docs/technical-spec.md`](docs/technical-spec.md) for the contract API and security model.
+
 ---
 
 ## Repository layout
