@@ -115,9 +115,11 @@ a Celo node directly via JSON-RPC, so you can host it anywhere (or open it from 
 
 ## Documentation
 
+- [**For organizations** (one-page brief)](docs/for-organizations.md) — what it is, why it matters, how to start (non-technical)
 - [Technical specification](docs/technical-spec.md) — contract API, data model, trust model, v1.1 roadmap
 - [How to run](docs/how-to-run.md) — deploy, register, submit, read, verify
 - [How to adopt](docs/how-to-adopt.md) — fork it and run it for your community
+- [Outreach templates](docs/outreach-templates.md) — ready-to-send messages for agencies, funders, and communities
 - [White paper (corrected markdown)](docs/WhitePaper.md)
 - [What changed vs the original sketch](docs/CHANGES.md)
 
