@@ -85,6 +85,8 @@ node submit/index.js relay --file reading.signed.json    # relayer pays; record 
 ```
 
 View records: open `web/index.html`, paste the deployed contract address, click **Load records**.
+The viewer is a single, dependency-free HTML file — no libraries, no build, no CDN. It talks to
+a Celo node directly via JSON-RPC, so you can host it anywhere (or open it from disk).
 
 ## Documentation
 

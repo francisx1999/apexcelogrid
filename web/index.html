@@ -123,53 +123,95 @@
       Open-source · Free for everyone · Built for public benefit — on the Celo blockchain.
     </footer>
 
-    <!-- ethers v6 UMD. When self-hosting, replace with a local copy. -->
-    <script src="https://cdn.jsdelivr.net/npm/ethers@6.13.4/dist/ethers.umd.min.js"></script>
+    <!--
+      No external scripts or libraries. This page talks to a Celo node directly with
+      raw JSON-RPC over fetch(), so it is fully self-contained: save it anywhere, open it
+      offline, and it only ever contacts the RPC endpoint you type in above. The two view
+      calls it makes are hardcoded by their 4-byte function selectors and the fixed-layout
+      Record struct is decoded by hand — no ABI library needed.
+    -->
     <script>
-      const ABI = [
-        "function total() view returns (uint256)",
-        "function getRecord(uint256) view returns (tuple(bytes32 siteId, uint64 periodStart, uint64 periodEnd, uint256 energyWh, address submitter, uint64 submittedAt, uint256 correctsIndex))",
-      ];
+      // Precomputed 4-byte function selectors (keccak256(signature)[:4]).
+      const SEL_TOTAL = "0x2ddbd13a"; // total()
+      const SEL_GET_RECORD = "0x03e9e609"; // getRecord(uint256)
       const MAX_UINT256 = (1n << 256n) - 1n;
       const $ = (id) => document.getElementById(id);
       const fmtTs = (s) => new Date(Number(s) * 1000).toISOString().replace("T", " ").slice(0, 16);
       const shortAddr = (a) => a.slice(0, 6) + "…" + a.slice(-4);
-      const decodeSite = (b32) => {
-        try { return ethers.decodeBytes32String(b32); } catch { return b32; }
-      };
+      const isAddress = (a) => /^0x[0-9a-fA-F]{40}$/.test(a);
+
+      // Minimal ABI helpers for our fixed, all-static shapes.
+      const strip0x = (h) => (h.startsWith("0x") ? h.slice(2) : h);
+      const word = (hex, i) => strip0x(hex).slice(i * 64, i * 64 + 64); // the i-th 32-byte word
+      const uintOf = (w) => BigInt("0x" + w);
+      const addrOf = (w) => "0x" + w.slice(24); // last 20 bytes
+      const encUint = (n) => BigInt(n).toString(16).padStart(64, "0");
+      // Decode a bytes32-encoded ASCII label (right-padded with zero bytes).
+      function decodeSite(w) {
+        let s = "";
+        for (let i = 0; i < 64; i += 2) {
+          const b = w.slice(i, i + 2);
+          if (b === "00") break;
+          s += String.fromCharCode(parseInt(b, 16));
+        }
+        return s || "0x" + w;
+      }
+
+      // One eth_call to the RPC endpoint. Returns the raw hex result.
+      async function ethCall(rpc, to, data) {
+        const res = await fetch(rpc, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            jsonrpc: "2.0",
+            id: 1,
+            method: "eth_call",
+            params: [{ to, data }, "latest"],
+          }),
+        });
+        if (!res.ok) throw new Error(`RPC HTTP ${res.status}`);
+        const json = await res.json();
+        if (json.error) throw new Error(json.error.message || "RPC error");
+        return json.result;
+      }
 
       async function load() {
         const status = $("status");
         const rpc = $("rpc").value.trim();
         const address = $("address").value.trim();
-        if (!ethers.isAddress(address)) {
+        if (!isAddress(address)) {
           status.textContent = "Please enter a valid contract address.";
           return;
         }
         $("load").disabled = true;
         status.textContent = "Loading…";
         try {
-          const provider = new ethers.JsonRpcProvider(rpc);
-          const c = new ethers.Contract(address, ABI, provider);
-          const count = Number(await c.total());
+          const count = Number(uintOf(word(await ethCall(rpc, address, SEL_TOTAL), 0)));
           const rows = $("rows");
           rows.innerHTML = "";
           let totalWh = 0n;
           const sites = new Set();
           for (let i = 0; i < count; i++) {
-            const r = await c.getRecord(i);
-            const isAdj = r.correctsIndex !== MAX_UINT256;
-            if (!isAdj) totalWh += r.energyWh;
-            sites.add(r.siteId);
+            // getRecord(i) -> a fully-static 7-word tuple, encoded inline.
+            const ret = await ethCall(rpc, address, SEL_GET_RECORD + encUint(i));
+            const siteId = word(ret, 0);
+            const periodStart = uintOf(word(ret, 1));
+            const periodEnd = uintOf(word(ret, 2));
+            const energyWh = uintOf(word(ret, 3));
+            const submitter = addrOf(word(ret, 4));
+            const correctsIndex = uintOf(word(ret, 6));
+            const isAdj = correctsIndex !== MAX_UINT256;
+            if (!isAdj) totalWh += energyWh;
+            sites.add(siteId);
             const tr = document.createElement("tr");
             tr.innerHTML =
               `<td>${i}</td>` +
-              `<td>${decodeSite(r.siteId)}</td>` +
-              `<td>${fmtTs(r.periodStart)}</td>` +
-              `<td>${fmtTs(r.periodEnd)}</td>` +
-              `<td>${(Number(r.energyWh) / 1000).toLocaleString()}</td>` +
-              `<td><code>${shortAddr(r.submitter)}</code></td>` +
-              `<td>${isAdj ? `<span class="badge">adjusts #${r.correctsIndex}</span>` : "original"}</td>`;
+              `<td>${decodeSite(siteId)}</td>` +
+              `<td>${fmtTs(periodStart)}</td>` +
+              `<td>${fmtTs(periodEnd)}</td>` +
+              `<td>${(Number(energyWh) / 1000).toLocaleString()}</td>` +
+              `<td><code>${shortAddr(submitter)}</code></td>` +
+              `<td>${isAdj ? `<span class="badge">adjusts #${correctsIndex}</span>` : "original"}</td>`;
             rows.appendChild(tr);
           }
           $("stat-count").textContent = count.toLocaleString();
@@ -178,7 +220,7 @@
           $("stats").hidden = false;
           status.textContent = count ? `Loaded ${count} record(s).` : "No records yet.";
         } catch (e) {
-          status.textContent = "Error: " + (e.shortMessage || e.message);
+          status.textContent = "Error: " + (e.message || e);
         } finally {
           $("load").disabled = false;
         }
