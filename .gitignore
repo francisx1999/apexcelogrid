@@ -1,0 +1,24 @@
+# dependencies
+node_modules/
+submit/node_modules/
+
+# secrets — never commit
+.env
+.env.local
+submit/.env
+
+# hardhat build output
+artifacts/
+cache/
+typechain-types/
+
+# extracted PDF text (working files)
+*.tmp
+coverage/
+coverage.json
+
+# editor / OS
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

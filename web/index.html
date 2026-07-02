@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ApexCeloGrid — Public Electricity Ledger</title>
+    <style>
+      :root {
+        --bg: #0b1a12;
+        --card: #12261a;
+        --line: #1f3a29;
+        --text: #e8f2ea;
+        --muted: #8fb39c;
+        --accent: #35d07f; /* Celo green */
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+        background: var(--bg);
+        color: var(--text);
+        line-height: 1.5;
+      }
+      header {
+        padding: 2rem 1.25rem 1.25rem;
+        border-bottom: 1px solid var(--line);
+      }
+      h1 { margin: 0 0 0.25rem; font-size: 1.6rem; }
+      .tagline { color: var(--muted); margin: 0; }
+      main { max-width: 960px; margin: 0 auto; padding: 1.25rem; }
+      .config {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.75rem;
+        align-items: end;
+        background: var(--card);
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        padding: 1rem;
+        margin-bottom: 1.25rem;
+      }
+      .field { display: flex; flex-direction: column; gap: 0.25rem; flex: 1 1 220px; }
+      label { font-size: 0.8rem; color: var(--muted); }
+      input, select {
+        background: #0d1f15;
+        border: 1px solid var(--line);
+        color: var(--text);
+        border-radius: 8px;
+        padding: 0.55rem 0.6rem;
+        font-size: 0.95rem;
+      }
+      button {
+        background: var(--accent);
+        color: #06130c;
+        border: 0;
+        border-radius: 8px;
+        padding: 0.6rem 1rem;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      button:disabled { opacity: 0.6; cursor: default; }
+      .status { color: var(--muted); margin: 0 0 1rem; min-height: 1.2em; }
+      .stats { display: flex; gap: 1rem; flex-wrap: wrap; margin-bottom: 1rem; }
+      .stat {
+        background: var(--card);
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        padding: 0.9rem 1.1rem;
+        flex: 1 1 160px;
+      }
+      .stat .n { font-size: 1.5rem; font-weight: 700; color: var(--accent); }
+      .stat .k { color: var(--muted); font-size: 0.8rem; }
+      table { width: 100%; border-collapse: collapse; }
+      .table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 12px; }
+      th, td { text-align: left; padding: 0.6rem 0.75rem; border-bottom: 1px solid var(--line); white-space: nowrap; }
+      th { color: var(--muted); font-weight: 600; font-size: 0.8rem; }
+      tr:last-child td { border-bottom: 0; }
+      .badge { font-size: 0.7rem; color: var(--accent); border: 1px solid var(--accent); border-radius: 999px; padding: 0.05rem 0.5rem; }
+      footer { color: var(--muted); font-size: 0.8rem; padding: 1.5rem 1.25rem; text-align: center; }
+      code { background: #0d1f15; padding: 0.1rem 0.35rem; border-radius: 6px; }
+      a { color: var(--accent); }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>ApexCeloGrid</h1>
+      <p class="tagline">An open, public record of the electricity Nigeria produces — free for everyone.</p>
+    </header>
+    <main>
+      <div class="config">
+        <div class="field">
+          <label for="rpc">Celo RPC URL</label>
+          <input id="rpc" value="https://alfajores-forno.celo-testnet.org" />
+        </div>
+        <div class="field">
+          <label for="address">ProductionLedger address</label>
+          <input id="address" placeholder="0x…" />
+        </div>
+        <button id="load">Load records</button>
+      </div>
+
+      <p class="status" id="status">Enter a deployed contract address and click “Load records”. Reading is free — no wallet needed.</p>
+
+      <div class="stats" id="stats" hidden>
+        <div class="stat"><div class="n" id="stat-count">0</div><div class="k">records</div></div>
+        <div class="stat"><div class="n" id="stat-energy">0</div><div class="k">total kWh (originals)</div></div>
+        <div class="stat"><div class="n" id="stat-sites">0</div><div class="k">distinct sites</div></div>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>#</th><th>Site</th><th>Period start</th><th>Period end</th>
+              <th>Energy (kWh)</th><th>Submitter</th><th>Type</th>
+            </tr>
+          </thead>
+          <tbody id="rows"></tbody>
+        </table>
+      </div>
+    </main>
+    <footer>
+      Open-source · Free for everyone · Built for public benefit — on the Celo blockchain.
+    </footer>
+
+    <!-- ethers v6 UMD. When self-hosting, replace with a local copy. -->
+    <script src="https://cdn.jsdelivr.net/npm/ethers@6.13.4/dist/ethers.umd.min.js"></script>
+    <script>
+      const ABI = [
+        "function total() view returns (uint256)",
+        "function getRecord(uint256) view returns (tuple(bytes32 siteId, uint64 periodStart, uint64 periodEnd, uint256 energyWh, address submitter, uint64 submittedAt, uint256 correctsIndex))",
+      ];
+      const MAX_UINT256 = (1n << 256n) - 1n;
+      const $ = (id) => document.getElementById(id);
+      const fmtTs = (s) => new Date(Number(s) * 1000).toISOString().replace("T", " ").slice(0, 16);
+      const shortAddr = (a) => a.slice(0, 6) + "…" + a.slice(-4);
+      const decodeSite = (b32) => {
+        try { return ethers.decodeBytes32String(b32); } catch { return b32; }
+      };
+
+      async function load() {
+        const status = $("status");
+        const rpc = $("rpc").value.trim();
+        const address = $("address").value.trim();
+        if (!ethers.isAddress(address)) {
+          status.textContent = "Please enter a valid contract address.";
+          return;
+        }
+        $("load").disabled = true;
+        status.textContent = "Loading…";
+        try {
+          const provider = new ethers.JsonRpcProvider(rpc);
+          const c = new ethers.Contract(address, ABI, provider);
+          const count = Number(await c.total());
+          const rows = $("rows");
+          rows.innerHTML = "";
+          let totalWh = 0n;
+          const sites = new Set();
+          for (let i = 0; i < count; i++) {
+            const r = await c.getRecord(i);
+            const isAdj = r.correctsIndex !== MAX_UINT256;
+            if (!isAdj) totalWh += r.energyWh;
+            sites.add(r.siteId);
+            const tr = document.createElement("tr");
+            tr.innerHTML =
+              `<td>${i}</td>` +
+              `<td>${decodeSite(r.siteId)}</td>` +
+              `<td>${fmtTs(r.periodStart)}</td>` +
+              `<td>${fmtTs(r.periodEnd)}</td>` +
+              `<td>${(Number(r.energyWh) / 1000).toLocaleString()}</td>` +
+              `<td><code>${shortAddr(r.submitter)}</code></td>` +
+              `<td>${isAdj ? `<span class="badge">adjusts #${r.correctsIndex}</span>` : "original"}</td>`;
+            rows.appendChild(tr);
+          }
+          $("stat-count").textContent = count.toLocaleString();
+          $("stat-energy").textContent = (Number(totalWh) / 1000).toLocaleString();
+          $("stat-sites").textContent = sites.size.toLocaleString();
+          $("stats").hidden = false;
+          status.textContent = count ? `Loaded ${count} record(s).` : "No records yet.";
+        } catch (e) {
+          status.textContent = "Error: " + (e.shortMessage || e.message);
+        } finally {
+          $("load").disabled = false;
+        }
+      }
+      $("load").addEventListener("click", load);
+    </script>
+  </body>
+</html>

@@ -1,0 +1,14 @@
+{
+  "name": "apexcelogrid-submit",
+  "version": "1.0.0",
+  "description": "Open-source CLI for registering sites and submitting production readings to ApexCeloGrid.",
+  "type": "commonjs",
+  "license": "MIT",
+  "bin": {
+    "apexcelogrid": "./index.js"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.0",
+    "ethers": "^6.13.0"
+  }
+}
